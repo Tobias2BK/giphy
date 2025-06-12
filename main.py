@@ -1,6 +1,6 @@
 from flask import Flask, send_file, request, abort
 from datetime import datetime
-from PIL import Image, GifImagePlugin
+from PIL import Image, ImageSequence
 import io
 import logging
 import random
@@ -9,63 +9,58 @@ import hashlib
 
 app = Flask(__name__)
 
-# Cấu hình ghi log
+# 🧹 Ẩn log mặc định của werkzeug
+import logging as py_logging
+py_logging.getLogger('werkzeug').setLevel(py_logging.ERROR)
+
+# 📝 Cấu hình log riêng
 log_file = 'track.log'
 logging.basicConfig(
     filename=log_file,
     level=logging.INFO,
-    format='%(asctime)s - IP: %(message)s'
+    format='%(asctime)s - %(message)s'
 )
 
+# 📦 Hàm lấy IP thực
+def get_client_ip():
+    xff = request.headers.get('X-Forwarded-For', '')
+    if xff:
+        return xff.split(',')[0].strip()
+    return request.remote_addr
+
+# 🎯 Ghi log chi tiết
+def log_request():
+    ip = get_client_ip()
+    timestamp = datetime.utcnow().isoformat()
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    path = request.path
+    query = request.query_string.decode()
+    hash_id = hashlib.md5(os.urandom(16)).hexdigest()
+    logging.info(f'[TRACK] IP: {ip} | Time: {timestamp} | Path: {path}?{query} | UA: {user_agent} | ID: {hash_id}')
+
+# 🖼️ Trả về ảnh GIF 1x1 để ẩn trong HTML
+def generate_tracking_gif():
+    img = Image.new('RGBA', (1, 1), (255, 255, 255, 0))  # Transparent
+    buffer = io.BytesIO()
+    img.save(buffer, format='GIF')
+    buffer.seek(0)
+    return buffer
+
+@app.route('/track.gif')
+def track():
+    log_request()
+    buffer = generate_tracking_gif()
+    return send_file(buffer, mimetype='image/gif')
+
+# 📄 Hiển thị log dưới dạng HTML
 @app.route('/log')
 def view_log():
     try:
         with open(log_file, 'r') as f:
             content = f.read()
-        return f"<pre>{content}</pre>"
+        return f"<pre style='white-space: pre-wrap;'>{content}</pre>"
     except FileNotFoundError:
         return 'Log file not found.', 404
-
-@app.route('/track.gif')
-def track():
-    # Lấy IP client
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    timestamp = datetime.utcnow().isoformat()
-    logging.info(f'{ip} - {timestamp}')
-
-    # Load ảnh gốc
-    original = Image.open('test.gif')
-
-    # Lấy frame đầu (nếu ảnh động)
-    frame = original.copy().convert('RGB')
-    pixels = frame.load()
-
-    # Thêm nhiễu nhẹ
-    for _ in range(10):
-        x = random.randint(0, frame.width - 1)
-        y = random.randint(0, frame.height - 1)
-        r, g, b = pixels[x, y]
-        pixels[x, y] = (
-            (r + random.randint(-1, 1)) % 256,
-            (g + random.randint(-1, 1)) % 256,
-            (b + random.randint(-1, 1)) % 256,
-        )
-
-    # Tạm lưu vào buffer dưới dạng GIF (giữ định dạng gốc)
-    buffer = io.BytesIO()
-    frame.save(
-        buffer,
-        format='GIF',
-        save_all=True,
-        append_images=[original.copy()],
-        loop=0,
-        comment=f"Tracked at {timestamp}, hash={hashlib.md5(os.urandom(16)).hexdigest()}".encode('utf-8')
-    )
-    buffer.seek(0)
-
-    # Gửi về client
-    return send_file(buffer, mimetype='image/gif')
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
