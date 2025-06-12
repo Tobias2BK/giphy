@@ -47,11 +47,24 @@ def log_request():
 
 # Tạo ảnh GIF 1x1 trong suốt
 def generate_tracking_gif():
-    img = Image.new('RGBA', (1, 1), (255, 255, 255, 0))
+    # Tạo ảnh 128x128 màu trắng với dòng chữ "TRACKED"
+    img = Image.new('RGB', (128, 128), (255, 255, 255))
+    
+    try:
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(img)
+        
+        # Font mặc định
+        draw.text((10, 50), "CLICK ME", fill=(255, 0, 0))
+    except Exception:
+        pass  # Nếu không có ImageDraw hoặc font, vẫn trả về ảnh trắng
+
+    # Lưu ảnh thành GIF
     buffer = io.BytesIO()
     img.save(buffer, format='GIF')
     buffer.seek(0)
     return buffer
+
 
 @app.route('/track.gif')
 def track():
