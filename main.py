@@ -13,6 +13,17 @@ logging.basicConfig(
     format='%(asctime)s - %(message)s'
 )
 
+@app.route('/log')
+def view_log():
+    try:
+        with open('track.log', 'r') as f:
+            content = f.read()
+        # Hiển thị log dưới dạng văn bản trong trình duyệt
+        return f"<pre>{content}</pre>"
+    except FileNotFoundError:
+        return 'Log file not found.', 404
+
+
 @app.route('/test.gif')
 def track():
     ip = request.headers.get('X-Forwarded-For', request.remote_addr)
